@@ -1,0 +1,171 @@
+import pygame
+import random
+import sys
+
+pygame.init()
+
+# Настройки экрана
+WIDTH, HEIGHT = 800, 600
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+pygame.display.set_caption("FNaF 3 Minimal Prototype")
+clock = pygame.time.Clock()
+
+# Цвета
+BLACK = (0, 0, 0)
+GREEN = (0, 255, 0)
+RED = (255, 0, 0)
+WHITE = (255, 255, 255)
+GREY = (50, 50, 50)
+DARK = (20, 20, 30)
+
+# Шрифты
+font = pygame.font.SysFont("Arial", 24)
+large_font = pygame.font.SysFont("Arial", 50)
+
+# Логика игры
+# Камеры: 0 - Офис, 1 - Cam 01, 2 - Cam 02, 3 - Cam 03 (Ближайшая к офису)
+springtrap_pos = 1
+current_cam = 1
+in_monitor = False
+game_over = False
+victory = False
+
+# Время и таймеры
+time_left = 60
+ai_timer = 0
+audio_cooldown = 0
+stun_timer = 2.5        # Спрингтрап оглушён (стоит на месте)
+ai_step_interval = 7.0  # интервал хода ИИ
+
+# Главный игровой цикл
+while True:
+    dt = clock.tick(30) / 1000.0
+
+    if not game_over and not victory:
+        time_left -= dt
+        if time_left <= 0:
+            victory = True
+
+        # Перезарядка аудиоприманки
+        if audio_cooldown > 0:
+            audio_cooldown -= dt
+
+        # --- Логика ИИ Спрингтрапа ---
+        if stun_timer > 0:
+            # Он оглушён — стоит, таймер хода не тикает
+            stun_timer -= dt
+        else:
+            ai_timer += dt
+            if ai_timer >= ai_step_interval:
+                ai_timer = 0
+                roll = random.random()
+
+                if roll < 0.65:
+                    # Движение вперёд
+                    if springtrap_pos < 3:
+                        springtrap_pos += 1
+                    else:
+                        # Он у офиса — атака
+                        game_over = True
+                elif roll < 0.85 and springtrap_pos > 1:
+                    # Иногда отступает сам
+                    springtrap_pos -= 1
+                # иначе стоит на месте
+
+    # Обработка событий
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+
+        if event.type == pygame.MOUSEBUTTONDOWN and not game_over and not victory:
+            mx, my = pygame.mouse.get_pos()
+
+            # Кнопка: Открыть/Закрыть Монитор
+            if 350 <= mx <= 450 and 530 <= my <= 580:
+                in_monitor = not in_monitor
+
+            if in_monitor:
+                # Кнопки переключения камер
+                if 50 <= mx <= 150 and 100 <= my <= 150:
+                    current_cam = 1
+                if 50 <= mx <= 150 and 170 <= my <= 220:
+                    current_cam = 2
+                if 50 <= mx <= 150 and 240 <= my <= 290:
+                    current_cam = 3
+
+                # Кнопка: Play Audio
+                if 200 <= mx <= 350 and 400 <= my <= 450 and audio_cooldown <= 0:
+                    # Приманка срабатывает, если Спрингтрап на соседней камере
+                    # или на той, которую ты смотришь, и он не в офисе
+                    if springtrap_pos > 1 and abs(springtrap_pos - current_cam) <= 1:
+                        springtrap_pos -= 1
+                        audio_cooldown = 5.0
+                        stun_timer = 4.0   # он замирает на 4 секунды
+                        ai_timer = 0       # сброс таймера, чтобы не шагнул сразу
+                    else:
+                        # Впустую — короткий кулдаун, чтобы не спамить
+                        audio_cooldown = 1.0
+
+    #Отрисовка
+    screen.fill(BLACK)
+
+    if game_over:
+        text = large_font.render("JUMPSCARE! GAME OVER", True, RED)
+        screen.blit(text, (WIDTH // 2 - 250, HEIGHT // 2 - 30))
+    elif victory:
+        text = large_font.render("6 AM - VICTORY!", True, GREEN)
+        screen.blit(text, (WIDTH // 2 - 150, HEIGHT // 2 - 30))
+    else:
+        if not in_monitor:
+            # Экран Офиса
+            pygame.draw.rect(screen, GREY, (100, 100, 600, 350))
+            text_office = font.render("Вы смотрите в Офис. Перед вами окно.", True, WHITE)
+            screen.blit(text_office, (200, 200))
+            if springtrap_pos == 3:
+                pygame.draw.circle(screen, RED, (400, 250), 30)
+                warn = font.render("КТО-ТО СТОИТ ЗА ОКНОМ!", True, RED)
+                screen.blit(warn, (280, 300))
+        else:
+            # Экран Монитора
+            pygame.draw.rect(screen, DARK, (30, 30, 740, 480))
+            cam_title = font.render(f"Просмотр: CAM 0{current_cam}", True, GREEN)
+            screen.blit(cam_title, (200, 50))
+
+            # Кнопки камер
+            for i in range(1, 4):
+                btn_color = RED if current_cam == i else WHITE
+                pygame.draw.rect(screen, btn_color, (50, 30 + i * 70, 100, 50), 2)
+                lbl = font.render(f"CAM 0{i}", True, WHITE)
+                screen.blit(lbl, (65, 40 + i * 70))
+
+            # Спрингтрап на просматриваемой камере
+            if springtrap_pos == current_cam:
+                pygame.draw.circle(screen, RED, (400, 250), 40)
+                if stun_timer > 0:
+                    spr_lbl = font.render(f"SPRINGTRAP ОГЛУШЁН ({int(stun_timer) + 1}s)", True, GREEN)
+                else:
+                    spr_lbl = font.render("ОБНАРУЖЕН СИЛУЭТ (SPRINGTRAP)", True, RED)
+                screen.blit(spr_lbl, (250, 320))
+            else:
+                empty_lbl = font.render("Помехи. Никого нет.", True, GREEN)
+                screen.blit(empty_lbl, (350, 250))
+
+            # Кнопка Play Audio
+            audio_btn_color = GREY if audio_cooldown > 0 else GREEN
+            pygame.draw.rect(screen, audio_btn_color, (200, 400, 150, 50))
+            aud_text = font.render("Play Audio", True, BLACK)
+            screen.blit(aud_text, (225, 410))
+            if audio_cooldown > 0:
+                cd_text = font.render(f"Cooldown {int(audio_cooldown) + 1}s", True, RED)
+                screen.blit(cd_text, (370, 410))
+
+        # Интерфейс поверх
+        pygame.draw.rect(screen, GREEN, (350, 530, 100, 50), 2)
+        mon_text = font.render("MONITOR", True, GREEN)
+        screen.blit(mon_text, (355, 540))
+
+        time_display = font.render(f"Time left: {int(time_left)}s", True, WHITE)
+        screen.blit(time_display, (620, 540))
+
+    pygame.display.flip()
