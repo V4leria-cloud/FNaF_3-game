@@ -58,6 +58,7 @@ def reset_game():
         "stun_timer": 2.0,
         "audio_cooldown": 0.0,
         "cam_glitch_timer": 18.0,
+        "vent_glitch_timer": 28.0,
 
         #Финал и скример
         "game_over": False,
@@ -166,6 +167,11 @@ while True:
         if state["cam_glitch_timer"] <= 0:
             state["cam_broken"] = True
             state["cam_glitch_timer"] = random.uniform(22.0, 35.0)
+        #Случайная поломка вентиляции со временем
+        state["vent_glitch_timer"] -= dt
+        if state["vent_glitch_timer"] <= 0:
+            state["vent_broken"] = True
+            state["vent_glitch_timer"] = random.uniform(25.0, 40.0)
 
         #Процесс починки систем
         if state["rebooting"]:
